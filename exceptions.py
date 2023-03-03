@@ -6,3 +6,8 @@ class CannotGetAPIresponse(Exception):
 class EmptyAPIResponse(Exception):
     """Пустой ответ от API."""
     pass
+
+
+class CantSendTheMessage(Exception):
+    """Не удалось отправить сообщение."""
+    pass

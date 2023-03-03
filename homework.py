@@ -17,7 +17,6 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
-PAYLOAD = {'from_date': 100000}
 
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
@@ -50,13 +49,12 @@ def send_message(bot, message):
     """Отправляем сообщение."""
     try:
         logging.info('Отправка сообщения...')
-        send_check = bot.send_message(
+        bot.send_message(
             chat_id=TELEGRAM_CHAT_ID,
             text=message,
         )
         logging.debug(f'Сообщение {message} отправлено')
-        if send_check:
-            return True
+        return True
     except telegram.error.TelegramError as error:
         logging.error(f'Сообщение не удалось отправить - {error}')
         return False
@@ -120,9 +118,9 @@ def main():
     logger.debug('Бот начал работу!')
     if not check_tokens():
         logging.critical('Не все токены на месте')
-        sys.exit()
+        raise KeyError('Не все токены на месте')
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(0)
+    timestamp = 0
     prev_report = {
         'name_messages': '',
         'output': ''
@@ -134,27 +132,24 @@ def main():
     while True:
         try:
             response = get_api_answer(timestamp)
-            task = check_response(response)
-            if task:
-                first_task = task[0]
-                current_report['name'] = first_task.get('homework_name')
-                current_report['output'] = first_task.get('status')
+            homeworks = check_response(response)
+            if homeworks:
+                homework = homeworks[0]
+                current_report['name_messages'] = homework.get('homework_name')
+                current_report['output'] = parse_status(homework)
             else:
                 current_report['output'] = 'Нет новых статусов.'
             if current_report != prev_report:
-                notification = parse_status(
-                    response.get('homeworks')[0]
-                )
-                send_message(bot, notification)
-                prev_report = current_report.copy()
-                timestamp = response.get('current_date')
+                if send_message(bot, current_report['output']):
+                    prev_report = current_report.copy()
+                    timestamp = response.get('current_date', timestamp)
             else:
                 logging.debug('Нет новых статусов')
         except exceptions.EmptyAPIResponse as error:
-            logger.error(f'Пустой ответ от API: {error}')
+            logger.error(f'Пустой ответ от API: {error}', exc_info=True)
         except Exception as error:
             error_str = f'Сбой в работе программы: {error}'
-            logger.error(error_str)
+            logger.error(error_str, exc_info=True)
             current_report['output'] = error_str
             if current_report != prev_report:
                 send_message(bot, error_str)
@@ -165,12 +160,13 @@ def main():
 
 if __name__ == '__main__':
     logging.basicConfig(
-        format='%(asctime)s, %(levelname)s, %(message)s',
+        format='%(asctime)s, %(levelname)s, %(message)s,'
+               ' %(lineno)d, %(funcName)s',
         level=logging.INFO,
     )
     handler_stream = logging.StreamHandler(sys.stdout)
     handler_file = logging.FileHandler(
-        os.path.join(BASE_DIR),
+        os.path.join(f'{BASE_DIR}/main.log'),
         encoding='UTF-8',
     )
     logger.addHandler(handler_stream)
