@@ -8,6 +8,3 @@ class EmptyAPIResponse(Exception):
     pass
 
 
-class CantSendTheMessage(Exception):
-    """Не удалось отправить сообщение."""
-    pass
